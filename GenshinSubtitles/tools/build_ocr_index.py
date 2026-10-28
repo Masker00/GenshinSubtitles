@@ -4,6 +4,7 @@ import json
 import pathlib
 import re
 import sqlite3
+from index_schema import SCHEMA_VERSION, fingerprints
 
 
 def key(text):
@@ -42,10 +43,15 @@ def main():
     try:
         db.execute("PRAGMA journal_mode=OFF")
         db.execute("PRAGMA synchronous=OFF")
-        db.execute("CREATE TABLE subtitle (zh_key TEXT PRIMARY KEY, en TEXT NOT NULL, text_id TEXT NOT NULL)")
+        db.execute("CREATE TABLE subtitle (zh_key TEXT PRIMARY KEY, zh TEXT NOT NULL, en TEXT NOT NULL, text_id TEXT NOT NULL)")
         db.execute("CREATE TABLE english_subtitle (en_key TEXT PRIMARY KEY, en TEXT NOT NULL, zh TEXT NOT NULL, text_id TEXT NOT NULL)")
         db.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         db.execute("INSERT INTO metadata VALUES ('extra_pairs', ?)", (str(len(args.chs_extra)),))
+        source_paths = [args.chs, args.en]
+        for pair in zip(args.chs_extra, args.en_extra):
+            source_paths.extend(pair)
+        db.execute("INSERT INTO metadata VALUES ('schema_version', ?)", (SCHEMA_VERSION,))
+        db.execute("INSERT INTO metadata VALUES ('sources', ?)", (json.dumps(fingerprints(source_paths)),))
         rows = []
         english_rows = []
         for text_id, zh in chs.items():
@@ -54,18 +60,18 @@ def main():
             if not normalized or not en:
                 continue
             if len(normalized) > 10:
-                rows.append((normalized, en, str(text_id)))
+                rows.append((normalized, zh, en, str(text_id)))
             en_normalized = english_key(en)
             if len(en_normalized) > 10:
                 english_rows.append((en_normalized, en, zh, str(text_id)))
             if len(rows) >= 5000:
-                db.executemany("INSERT OR IGNORE INTO subtitle VALUES (?, ?, ?)", rows)
+                db.executemany("INSERT OR IGNORE INTO subtitle VALUES (?, ?, ?, ?)", rows)
                 rows.clear()
             if len(english_rows) >= 5000:
                 db.executemany("INSERT OR IGNORE INTO english_subtitle VALUES (?, ?, ?, ?)", english_rows)
                 english_rows.clear()
         if rows:
-            db.executemany("INSERT OR IGNORE INTO subtitle VALUES (?, ?, ?)", rows)
+            db.executemany("INSERT OR IGNORE INTO subtitle VALUES (?, ?, ?, ?)", rows)
         if english_rows:
             db.executemany("INSERT OR IGNORE INTO english_subtitle VALUES (?, ?, ?, ?)", english_rows)
         db.execute("CREATE INDEX subtitle_text_id ON subtitle(text_id)")

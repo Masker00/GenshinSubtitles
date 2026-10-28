@@ -1,4 +1,4 @@
-"""Look up the opposite official subtitle from OCR text."""
+"""Local official-text lookup. Similarity is a heuristic, not a probability."""
 import argparse
 import base64
 import json
@@ -18,59 +18,76 @@ def english_key(text):
 
 
 def chinese_fuzzy_key(text):
-    # UI prompts, controller hints, and dynamic nicknames are often captured
-    # beside a Chinese subtitle. Keep the Han text for fuzzy comparison so
-    # those Latin fragments do not drown out the actual dialogue.
     return "".join(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]", text or ""))
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--db", type=pathlib.Path, required=True)
-parser.add_argument("--text-b64")
-parser.add_argument("--source", choices=("ZH", "EN"), default="ZH")
-parser.add_argument("--format", choices=("text", "json"), default="text")
-args = parser.parse_args()
-if args.text_b64:
-    text = base64.b64decode(args.text_b64).decode("utf-8")
-else:
-    text = sys.stdin.read()
-normalized = english_key(text) if args.source == "EN" else key(text)
-with sqlite3.connect(str(args.db)) as db:
-    table, column, values = ("english_subtitle", "en_key", "en, zh") if args.source == "EN" else ("subtitle", "zh_key", "en")
-    row = db.execute(f"SELECT {values} FROM {table} WHERE {column} = ? LIMIT 1", (normalized,)).fetchone()
+def lookup_text(db, text, source="ZH"):
+    """Accept exact matches or the existing ZH .82 / EN .80 fuzzy thresholds.
+
+    Both languages always come from the same accepted row. Search keys are
+    never exposed as official text. Caller owns the SQLite connection.
+    """
+    if source not in ("ZH", "EN"):
+        raise ValueError("source must be ZH or EN")
+    normalized = english_key(text) if source == "EN" else key(text)
+    table, column = ("english_subtitle", "en_key") if source == "EN" else ("subtitle", "zh_key")
+    row = db.execute(f"SELECT zh, en, text_id FROM {table} WHERE {column} = ? LIMIT 1", (normalized,)).fetchone()
     best_score = 1.0 if row else 0.0
+    method = "exact" if row else "none"
     if not row and len(normalized) >= 10:
-        # Windows OCR can insert spaces or misread one or two glyphs. Use a
-        # long contiguous fragment to narrow the local index, then score only
-        # those candidates. The returned text is still the official TextMap.
-        search_key = chinese_fuzzy_key(text) if args.source == "ZH" else normalized
-        fragment_width = 6 if args.source == "ZH" else 12
-        fragments = [search_key[i:i + fragment_width] for i in range(0, len(search_key) - fragment_width + 1)]
+        search_key = chinese_fuzzy_key(text) if source == "ZH" else normalized
+        width = 6 if source == "ZH" else 12
+        fragments = [search_key[i:i + width] for i in range(len(search_key) - width + 1)]
         if len(fragments) > 12:
             fragments = [fragments[round(i * (len(fragments) - 1) / 11)] for i in range(12)]
         candidates = {}
         for fragment in fragments:
             for candidate in db.execute(
-                f"SELECT {column}, {values} FROM {table} WHERE {column} LIKE ? LIMIT 80",
+                f"SELECT {column}, zh, en, text_id FROM {table} WHERE {column} LIKE ? LIMIT 80",
                 (f"%{fragment}%",),
             ):
                 candidates[candidate[0]] = candidate[1:]
         best = None
         for candidate_key, candidate_values in candidates.items():
-            score_key = chinese_fuzzy_key(candidate_key) if args.source == "ZH" else candidate_key
-            input_key = search_key if args.source == "ZH" else normalized
-            score = SequenceMatcher(None, input_key, score_key).ratio()
-            if args.source == "EN" and len(normalized) >= 25:
+            score_key = chinese_fuzzy_key(candidate_key) if source == "ZH" else candidate_key
+            score = SequenceMatcher(None, search_key, score_key).ratio()
+            if source == "EN" and len(normalized) >= 25:
                 score = max(score, SequenceMatcher(None, normalized, candidate_key[:len(normalized)]).ratio())
             if score > best_score:
-                best_score = score
-                best = candidate_values
-        threshold = 0.82 if args.source == "ZH" else 0.80
-        if best is not None and best_score >= threshold:
-            row = best
-opposite = row[1] if row and args.source == "EN" else row[0] if row else ""
-source = row[0] if row and args.source == "EN" and best_score >= 0.9 else ""
-if args.format == "json":
-    sys.stdout.buffer.write(json.dumps({"source": source, "opposite": opposite}, ensure_ascii=False).encode("utf-8"))
-elif opposite:
-    sys.stdout.buffer.write(opposite.encode("utf-8"))
+                best_score, best = score, candidate_values
+        if best is not None and best_score >= (0.82 if source == "ZH" else 0.80):
+            row, method = best, "fuzzy"
+    zh, en, text_id = row if row else ("", "", None)
+    return {"matched": row is not None, "zh": zh, "en": en, "text_id": text_id,
+            "method": method, "similarity": best_score,
+            "source": en if source == "EN" else zh,
+            "opposite": zh if source == "EN" else en}
+
+
+def lookup_database(path, text, source="ZH"):
+    from index_schema import check_schema
+    with sqlite3.connect(pathlib.Path(path).resolve().as_uri() + "?mode=ro", uri=True) as db:
+        check_schema(db)
+        return lookup_text(db, text, source)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", type=pathlib.Path, required=True)
+    parser.add_argument("--text-b64")
+    parser.add_argument("--source", choices=("ZH", "EN"), default="ZH")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    args = parser.parse_args()
+    try:
+        text = base64.b64decode(args.text_b64, validate=True).decode("utf-8") if args.text_b64 else sys.stdin.read()
+        result = lookup_database(args.db, text, args.source)
+        output = json.dumps(result, ensure_ascii=False) if args.format == "json" else result["opposite"]
+        sys.stdout.buffer.write(output.encode("utf-8"))
+    except (ValueError, OSError, sqlite3.Error) as error:
+        print(f"Lookup failed: {error}. Run setup.bat to validate/rebuild the index.", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

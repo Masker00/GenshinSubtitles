@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $python = Resolve-SubtitlePython
 Write-Output "Python: $python"
 & $python --version
-foreach ($file in @('overlay.ps1', 'tools/lookup_ocr_text.py', 'tools/build_ocr_index.py', 'data/subtitles-ocr.sqlite', 'data/TextMapCHS.json', 'data/TextMapEN.json', 'data/TextMap_MediumCHS.json', 'data/TextMap_MediumEN.json')) {
+foreach ($file in @('overlay.ps1', 'scan-worker.ps1', 'native/ScanJob.cs', 'tools/lookup_ocr_text.py', 'tools/build_ocr_index.py', 'tools/index_schema.py', 'data/subtitles-ocr.sqlite', 'data/TextMapCHS.json', 'data/TextMapEN.json', 'data/TextMap_MediumCHS.json', 'data/TextMap_MediumEN.json')) {
     if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot $file))) { throw "Missing required file: $file" }
     Write-Output "OK $file"
 }
@@ -24,5 +24,9 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 if ($RunTests) {
     & $python (Join-Path $PSScriptRoot 'tests/ocr_direction_tests.py')
     if ($LASTEXITCODE -ne 0) { throw 'OCR direction tests failed.' }
+    & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests/config_tests.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Configuration tests failed.' }
+    & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests/worker_tests.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Background worker tests failed.' }
 }
 Write-Output 'Environment check passed. Game UI behavior still requires a manual check.'

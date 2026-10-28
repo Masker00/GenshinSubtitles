@@ -53,11 +53,16 @@ try:
     assert lookup("EN", en.upper().replace(",", "")) == zh
     assert lookup("EN", "But for now, all yo u need to remember is this: If yo u collect Kresnik Kristall") == zh
     corrected = json.loads(lookup("EN", en.replace("now", "n0w") + " 0", "json"))
-    assert corrected == {"source": en, "opposite": zh}
+    assert corrected["source"] == en and corrected["opposite"] == zh and corrected["matched"]
+    chinese_result = json.loads(lookup("ZH", " ".join(zh), "json"))
+    assert chinese_result["source"] == zh and chinese_result["text_id"] == "1"
+    partial = json.loads(lookup("EN", "But for now, all yo u need to remember is this: If yo u collect Kresnik Kristall", "json"))
+    assert partial["matched"] and partial["source"] == en and partial["zh"] == zh
     assert lookup("EN", "unrelated English subtitle with no official match") == ""
     assert lookup("ZH", prompt_ocr) == prompt_en
     assert lookup("ZH", "我很早就进言但是内容完全无关别的事情") == ""
-    assert json.loads(lookup("EN", "unrelated English subtitle with no official match", "json")) == {"source": "", "opposite": ""}
+    missing = json.loads(lookup("EN", "unrelated English subtitle with no official match", "json"))
+    assert not missing["matched"] and not missing["source"] and not missing["opposite"]
     assert lookup("ZH", medium_zh) == ""
     chs_extra = folder / "TextMap_MediumCHS.json"
     en_extra = folder / "TextMap_MediumEN.json"
@@ -68,6 +73,10 @@ try:
     run(*build_args)
     assert lookup("ZH", " ".join(medium_zh)) == medium_en
     assert lookup("EN", medium_en) == medium_zh
+    for direction, text in (("ZH", medium_zh), ("EN", medium_en)):
+        record = json.loads(lookup(direction, text, "json"))
+        assert record["matched"] and record["zh"] == medium_zh and record["en"] == medium_en
+        assert record["text_id"] == "2545425690" and record["method"] == "exact"
     assert lookup("ZH", zh) == en
     assert lookup("EN", en) == zh
     # Reject mixed/conflicting sources before touching the existing index.

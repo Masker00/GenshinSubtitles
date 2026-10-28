@@ -1,58 +1,92 @@
-﻿$settingsPath = Join-Path $root 'data/overlay-settings.json'
-$settingsExistedAtStartup = Test-Path -LiteralPath $settingsPath
-$config = @{
-    Left = 16.5; Top = 84; Width = 67; Height = 9.5
-    FontSize = 24; ShowFrame = $true
-    DisplayLeft = 16.5; DisplayTop = 93.5; DisplayWidth = 67; DisplayHeight = 5.5
-    DisplayGap = 12; TextPadding = 16
-    PluginLanguage = 'ZH'; RecognitionLanguage = 'EN'; SubtitleLanguage = 'EN'
-}
-$hasSavedDisplayTop = $true
-$config.ToolbarLeft = -1.0; $config.ToolbarTop = -1.0; $config.ToolbarCollapsed = $false
-if ($settingsExistedAtStartup) {
-    try {
-        $saved = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($name in @('Left', 'Top', 'Width', 'Height', 'FontSize', 'DisplayLeft', 'DisplayTop', 'DisplayWidth', 'DisplayHeight', 'DisplayGap', 'TextPadding', 'ToolbarLeft', 'ToolbarTop')) {
-            if ($null -ne $saved.$name) { $config[$name] = [double]$saved.$name }
-        }
-        $hasSavedDisplayTop = $null -ne $saved.DisplayTop
-        if ($null -ne $saved.ShowFrame) { $config.ShowFrame = [bool]$saved.ShowFrame }
-        if ($null -ne $saved.ToolbarCollapsed) { $config.ToolbarCollapsed = [bool]$saved.ToolbarCollapsed }
-        if ($saved.PluginLanguage -in @('ZH', 'EN')) { $config.PluginLanguage = [string]$saved.PluginLanguage }
-        if ($saved.RecognitionLanguage -in @('ZH', 'EN')) {
-            $config.RecognitionLanguage = [string]$saved.RecognitionLanguage
-        } elseif ($saved.SourceLanguage -in @('ZH', 'EN')) {
-            # Preserve the input direction chosen by older versions.
-            $config.RecognitionLanguage = [string]$saved.SourceLanguage
-        }
-        if ($saved.SubtitleLanguage -in @('ZH', 'EN')) { $config.SubtitleLanguage = [string]$saved.SubtitleLanguage }
-    } catch {
-        Add-Content -LiteralPath (Join-Path $root 'overlay-errors.log') -Value ((Get-Date -Format o) + ' Invalid settings: ' + $_.Exception.Message)
+﻿# Persistent preferences only. Runtime state lives in runtime.ps1.
+function New-OverlayConfig {
+    return @{
+        Left=16.5; Top=84.0; Width=67.0; Height=9.5; FontSize=24; ShowFrame=$true
+        DisplayLeft=16.5; DisplayTop=93.5; DisplayWidth=67.0; DisplayHeight=5.5
+        DisplayGap=12; TextPadding=16; PluginLanguage='ZH'; RecognitionLanguage='EN'; SubtitleLanguage='EN'
+        ToolbarLeft=-1.0; ToolbarTop=-1.0; ToolbarCollapsed=$false
     }
 }
-$config.Left = [Math]::Max(0.0, [Math]::Min(95.0, [double]$config.Left))
-$config.Top = [Math]::Max(0.0, [Math]::Min(95.0, [double]$config.Top))
-$config.Width = [Math]::Max(5.0, [Math]::Min(100.0, [double]$config.Width))
-$config.Height = [Math]::Max(5.0, [Math]::Min(100.0, [double]$config.Height))
-$config.Width = [Math]::Min([double]$config.Width, 100.0 - $config.Left)
-$config.Height = [Math]::Min([double]$config.Height, 100.0 - $config.Top)
-$config.FontSize = [Math]::Max(12, [Math]::Min(48, $config.FontSize))
-$config.DisplayLeft = [Math]::Max(0.0, [Math]::Min(95.0, $config.DisplayLeft))
-$config.DisplayTop = if ($hasSavedDisplayTop) {
-    [Math]::Max(0.0, [Math]::Min(95.0, $config.DisplayTop))
-} else {
-    [Math]::Max(0, [Math]::Min(95, $config.Top - $config.DisplayHeight - 2))
+function Repair-OverlayConfig([hashtable]$Values) {
+    $defaults = New-OverlayConfig
+    $ranges = @{
+        Left=@(0.0,95.0); Top=@(0.0,95.0); Width=@(5.0,100.0); Height=@(5.0,100.0)
+        DisplayLeft=@(0.0,95.0); DisplayTop=@(0.0,95.0); DisplayWidth=@(5.0,100.0); DisplayHeight=@(5.0,100.0)
+        FontSize=@(12.0,48.0); DisplayGap=@(0.0,200.0); TextPadding=@(0.0,40.0)
+        ToolbarLeft=@(-1.0,100.0); ToolbarTop=@(-1.0,100.0)
+    }
+    foreach ($key in $ranges.Keys) {
+        $number = 0.0
+        $valid = $null -ne $Values[$key] -and $Values[$key] -isnot [bool] -and
+            [double]::TryParse([string]$Values[$key], [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)
+        if (!$valid -or [double]::IsNaN($number) -or [double]::IsInfinity($number)) { $number = $defaults[$key] }
+        $Values[$key] = [Math]::Max([double]$ranges[$key][0], [Math]::Min([double]$ranges[$key][1], $number))
+    }
+    $Values.Width = [Math]::Min([double]$Values.Width, 100.0 - $Values.Left)
+    $Values.Height = [Math]::Min([double]$Values.Height, 100.0 - $Values.Top)
+    $Values.DisplayWidth = [Math]::Min([double]$Values.DisplayWidth, 100.0 - $Values.DisplayLeft)
+    foreach ($key in @('FontSize','TextPadding','DisplayGap')) { $Values[$key] = [int]$Values[$key] }
+    foreach ($key in @('ShowFrame','ToolbarCollapsed')) {
+        if ($Values[$key] -isnot [bool]) { $Values[$key] = $defaults[$key] }
+    }
+    foreach ($key in @('PluginLanguage','RecognitionLanguage','SubtitleLanguage')) {
+        if ($Values[$key] -notin @('ZH','EN')) { $Values[$key] = $defaults[$key] }
+    }
 }
-$config.DisplayWidth = [Math]::Max(5.0, [Math]::Min(100.0 - $config.DisplayLeft, $config.DisplayWidth))
-$config.DisplayHeight = [Math]::Max(5.0, [Math]::Min(100.0, $config.DisplayHeight))
-$config.DisplayGap = [Math]::Max(0, [Math]::Min(200, $config.DisplayGap))
-$config.TextPadding = [Math]::Max(0, [Math]::Min(40, $config.TextPadding))
-$freshDefaultsApplied = !$settingsExistedAtStartup -and $config.Left -eq 16.5 -and $config.Top -eq 84 -and $config.Width -eq 67 -and $config.Height -eq 9.5 -and
-    $config.FontSize -eq 24 -and $config.DisplayLeft -eq 16.5 -and $config.DisplayTop -eq 93.5 -and $config.DisplayWidth -eq 67 -and
-    $config.DisplayHeight -eq 5.5 -and $config.TextPadding -eq 16 -and $config.PluginLanguage -eq 'ZH' -and
-    $config.RecognitionLanguage -eq 'EN' -and $config.SubtitleLanguage -eq 'EN'
-
+function Read-OverlayConfig([string]$Path) {
+    $values = New-OverlayConfig
+    $problem = ''
+    if (Test-Path -LiteralPath $Path) {
+        try {
+            $saved = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($null -eq $saved -or $saved.GetType().FullName -ne 'System.Management.Automation.PSCustomObject') { throw 'Settings must be a JSON object.' }
+            foreach ($name in @($values.Keys)) {
+                if ($null -ne $saved.$name) { $values[$name] = $saved.$name }
+            }
+            if ($saved.RecognitionLanguage -notin @('ZH','EN') -and $saved.SourceLanguage -in @('ZH','EN')) {
+                $values.RecognitionLanguage = [string]$saved.SourceLanguage
+            }
+            Repair-OverlayConfig $values
+            if ($null -eq $saved.DisplayTop) { $values.DisplayTop = [Math]::Max(0.0, [Math]::Min(95.0, $values.Top - $values.DisplayHeight - 2.0)) }
+        } catch {
+            $values = New-OverlayConfig
+            $problem = 'Unreadable settings preserved at ' + $Path + '. Rename or repair that file before saving. ' + $_.Exception.Message
+        }
+    }
+    return @{ Values=$values; Error=$problem; Writable=(!$problem) }
+}
+function Write-OverlayConfig([string]$Path, [hashtable]$Values) {
+    Repair-OverlayConfig $Values
+    $parent = Split-Path -Parent $Path
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    $temporary = $Path + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
+    try {
+        [IO.File]::WriteAllText($temporary, ($Values | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($temporary, $Path, $Path + '.bak') }
+        else { [IO.File]::Move($temporary, $Path) }
+    } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
+}
 function Save-OverlaySettings {
-    $savePath = if ($UiCheck) { Join-Path $root 'test-results/overlay-ui-settings.json' } else { $settingsPath }
-    $config | ConvertTo-Json | Set-Content -LiteralPath $savePath -Encoding UTF8
+    if (!$settingsWritable) {
+        if ($ocrStatus) { $ocrStatus.Text = $configLoadError }
+        return
+    }
+    try { Write-OverlayConfig $settingsPath $config }
+    catch { if ($ocrStatus) { $ocrStatus.Text = 'Settings save failed: ' + $_.Exception.Message }; Write-Warning $_.Exception.Message }
+}
+function Update-OverlayConfig([hashtable]$Changes, [bool]$Persist=$true) {
+    $before = @($config.RecognitionLanguage,$config.Left,$config.Top,$config.Width,$config.Height) -join '|'
+    foreach ($name in $Changes.Keys) { if ($config.ContainsKey($name)) { $config[$name] = $Changes[$name] } }
+    Repair-OverlayConfig $config
+    $after = @($config.RecognitionLanguage,$config.Left,$config.Top,$config.Width,$config.Height) -join '|'
+    if ($before -ne $after -and (Get-Command Reset-ScanState -ErrorAction SilentlyContinue)) { Reset-ScanState }
+    if ($Persist) { Save-OverlaySettings }
+}
+function Initialize-OverlayConfig {
+    $script:settingsPath = Join-Path $root 'data/overlay-settings.json'
+    if ($UiCheck) { $script:settingsPath = Join-Path $root ('test-results/ui-config-' + [Guid]::NewGuid().ToString('N') + '/overlay-settings.json') }
+    $script:settingsExistedAtStartup = Test-Path -LiteralPath $settingsPath
+    $loaded = Read-OverlayConfig $settingsPath
+    $script:config = $loaded.Values; $script:settingsWritable = $loaded.Writable; $script:configLoadError = $loaded.Error
+    $script:freshDefaultsApplied = !$settingsExistedAtStartup
 }

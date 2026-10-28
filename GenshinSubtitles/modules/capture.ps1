@@ -8,8 +8,8 @@
 
 function Get-CropRectangle([object]$Bounds) {
     $left = [int](@($Bounds.Left)[0]); $top = [int](@($Bounds.Top)[0])
-    $width = [Math]::Max(640, [int](@($Bounds.Right)[0]) - $left)
-    $height = [Math]::Max(360, [int](@($Bounds.Bottom)[0]) - $top)
+    $width = [Math]::Max(20, [int](@($Bounds.Right)[0]) - $left)
+    $height = [Math]::Max(20, [int](@($Bounds.Bottom)[0]) - $top)
     $x = $left + [int]($width * $config.Left / 100)
     $y = $top + [int]($height * $config.Top / 100)
     $w = [Math]::Max(20, [int]($width * [Math]::Min($config.Width, 100 - $config.Left) / 100))
@@ -59,6 +59,7 @@ function Invoke-Ocr([string]$Path, [object]$Engine) {
         return [string]$result.Text
     }
     finally {
+        if ($softwareBitmap) { try { $softwareBitmap.Dispose() } catch {} }
         if ($stream) { try { $stream.Dispose() } catch {} }
     }
 }

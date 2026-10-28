@@ -10,7 +10,7 @@
         PreviewOcr = 'Preview OCR crop'; Reset = 'Reset'; Close = 'Close'; Settings = 'SET'; Exit = 'EXIT'
         HideToolbar = 'Hide toolbar'; DragToolbar = 'Drag to move'; ShowToolbar = 'Show toolbar; drag to move'
         DragSubtitle = 'Drag subtitle to position'; PreviewInput = 'Preview: actual OCR input'; PreviewError = 'Preview error'
-        OcrNoText = 'OCR: no text in frame'; OcrShort = 'OCR (10 or fewer characters)'; Official = 'Official'; NoMatch = '(no match)'; OcrError = 'OCR error'
+        OcrNoText = 'OCR: no text in frame'; OcrShort = 'OCR (10 or fewer characters)'; Official = 'Official'; NoMatch = '(no match)'; OcrError = 'OCR error'; GameUnavailable = 'Game window unavailable. Start the game and use windowed or borderless mode.'
     }
     ZH = @{
         SettingsTitle = '字幕设置'; OcrTab = '识别'; SubtitleTab = '字幕'
@@ -23,7 +23,7 @@
         PreviewOcr = '预览识别区域'; Reset = '重置'; Close = '关闭'; Settings = '设置'; Exit = '退出'
         HideToolbar = '收起工具栏'; DragToolbar = '拖动以移动'; ShowToolbar = '展开工具栏；拖动以移动'
         DragSubtitle = '拖动字幕以调整位置'; PreviewInput = '预览：实际 OCR 输入'; PreviewError = '预览错误'
-        OcrNoText = 'OCR：识别区域内没有文字'; OcrShort = 'OCR（不超过 10 个字符）'; Official = '官方'; NoMatch = '（未匹配）'; OcrError = 'OCR 错误'
+        OcrNoText = 'OCR：识别区域内没有文字'; OcrShort = 'OCR（不超过 10 个字符）'; Official = '官方'; NoMatch = '（未匹配）'; OcrError = 'OCR 错误'; GameUnavailable = '未检测到可用的游戏窗口。请先启动游戏，并使用窗口化或无边框模式。'
     }
 }
 function Get-UiText([string]$Name) { return [string]$uiStrings[$config.PluginLanguage][$Name] }
@@ -88,12 +88,10 @@ $toolbarTips = New-Object System.Windows.Forms.ToolTip
 
 function Save-ToolbarPosition {
     $bounds = $toolbar.MovementBounds
-    $config.ToolbarLeft = [Math]::Round(($toolbar.Left - $bounds.Left) * 100.0 / [Math]::Max(1, $bounds.Width), 2)
-    $config.ToolbarTop = [Math]::Round(($toolbar.Top - $bounds.Top) * 100.0 / [Math]::Max(1, $bounds.Height), 2)
-    Save-OverlaySettings
+    Update-OverlayConfig @{ ToolbarLeft=[Math]::Round(($toolbar.Left - $bounds.Left) * 100.0 / [Math]::Max(1, $bounds.Width), 2); ToolbarTop=[Math]::Round(($toolbar.Top - $bounds.Top) * 100.0 / [Math]::Max(1, $bounds.Height), 2) }
 }
 function Set-ToolbarCollapsed([bool]$Collapsed, [bool]$Persist = $true) {
-    $config.ToolbarCollapsed = $Collapsed
+    Update-OverlayConfig @{ ToolbarCollapsed=$Collapsed } $false
     $toolbar.Collapsed = $Collapsed
     foreach ($button in @($btnToggle, $btnLang, $btnSettings, $btnExit, $btnHide)) { $button.Visible = !$Collapsed }
     $toolbar.Size = if ($Collapsed) { [Drawing.Size]::new(40, 40) } else { [Drawing.Size]::new(360, 42) }
@@ -193,6 +191,7 @@ function Set-Subtitle([string]$Text) {
         if ($state.LastBounds) { Update-Layout $state.LastBounds }
         $subtitle.Visible = $true
     } else {
+        $label.Text = ''
         $subtitle.Visible = $false
     }
 }
@@ -203,13 +202,12 @@ function Get-CurrentSubtitleText {
 function Set-SubtitleLanguage([string]$Language, [bool]$Persist = $true) {
     if ($Language -notin @('ZH', 'EN')) { return }
     $state.Language = $Language
-    $config.SubtitleLanguage = $Language
+    Update-OverlayConfig @{ SubtitleLanguage=$Language } $Persist
     if ($null -ne $settingSubtitleLanguage) {
         $script:settingsReady = $false
         try { $settingSubtitleLanguage.SelectedIndex = if ($Language -eq 'EN') { 1 } else { 0 } }
         finally { $script:settingsReady = $true }
     }
-    if ($Persist) { Save-OverlaySettings }
     Update-Buttons
     if ($state.LastSource -or $state.LastOpposite) { Set-Subtitle (Get-CurrentSubtitleText) }
 }
@@ -359,31 +357,18 @@ function Apply-Settings {
     $settingHeight.Maximum = 100 - $settingTop.Value
     $settingDisplayWidth.Maximum = 100 - $settingDisplayLeft.Value
     $script:settingsReady = $true
-    $config.Left = [double]$settingLeft.Value
-    $config.Top = [double]$settingTop.Value
-    $config.Width = [double]$settingWidth.Value
-    $config.Height = [double]$settingHeight.Value
-    $config.FontSize = [int]$settingFont.Value
-    $config.ShowFrame = $settingFrame.Checked
-    $selectedPluginLanguage = if ($settingPluginLanguage.SelectedIndex -eq 1) { 'EN' } else { 'ZH' }
-    if ($config.PluginLanguage -ne $selectedPluginLanguage) {
-        $config.PluginLanguage = $selectedPluginLanguage
-        Apply-UiLanguage
+    $previousUi = $config.PluginLanguage
+    Update-OverlayConfig @{
+        Left=[double]$settingLeft.Value; Top=[double]$settingTop.Value; Width=[double]$settingWidth.Value; Height=[double]$settingHeight.Value
+        FontSize=[int]$settingFont.Value; ShowFrame=$settingFrame.Checked
+        PluginLanguage=$(if ($settingPluginLanguage.SelectedIndex -eq 1) {'EN'} else {'ZH'})
+        RecognitionLanguage=$(if ($settingRecognitionLanguage.SelectedIndex -eq 1) {'EN'} else {'ZH'})
+        SubtitleLanguage=$(if ($settingSubtitleLanguage.SelectedIndex -eq 1) {'EN'} else {'ZH'})
+        DisplayLeft=[double]$settingDisplayLeft.Value; DisplayTop=[double]$settingDisplayTop.Value
+        DisplayWidth=[double]$settingDisplayWidth.Value; DisplayHeight=[double]$settingDisplayHeight.Value; TextPadding=[int]$settingTextPadding.Value
     }
-    $selectedRecognitionLanguage = if ($settingRecognitionLanguage.SelectedIndex -eq 1) { 'EN' } else { 'ZH' }
-    if ($config.RecognitionLanguage -ne $selectedRecognitionLanguage) {
-        $config.RecognitionLanguage = $selectedRecognitionLanguage
-        $state.LastOcr = ''; $state.LastLookup = ''; $state.LastSource = ''; $state.LastOpposite = ''; $state.Misses = 0
-        Set-Subtitle ''
-    }
-    $selectedSubtitleLanguage = if ($settingSubtitleLanguage.SelectedIndex -eq 1) { 'EN' } else { 'ZH' }
-    if ($state.Language -ne $selectedSubtitleLanguage) { Set-SubtitleLanguage $selectedSubtitleLanguage $false }
-    $config.DisplayLeft = [double]$settingDisplayLeft.Value
-    $config.DisplayTop = [double]$settingDisplayTop.Value
-    $config.DisplayWidth = [double]$settingDisplayWidth.Value
-    $config.DisplayHeight = [double]$settingDisplayHeight.Value
-    $config.TextPadding = [int]$settingTextPadding.Value
-    Save-OverlaySettings
+    if ($previousUi -ne $config.PluginLanguage) { Apply-UiLanguage }
+    if ($state.Language -ne $config.SubtitleLanguage) { Set-SubtitleLanguage $config.SubtitleLanguage $false }
     if ($state.LastBounds) { Update-Layout $state.LastBounds }
 }
 foreach ($input in @($settingLeft, $settingTop, $settingWidth, $settingHeight, $settingFont, $settingDisplayLeft, $settingDisplayTop, $settingDisplayWidth, $settingDisplayHeight, $settingTextPadding)) {
@@ -431,7 +416,7 @@ function Sync-SubtitleSelection([bool]$Persist = $false) {
         $settingDisplayHeight.Value = $config.DisplayHeight
     }
     finally { $script:settingsReady = $true }
-    if ($Persist) { Save-OverlaySettings }
+    Update-OverlayConfig @{} $Persist
     Update-Layout $state.LastBounds
 }
 
@@ -447,6 +432,7 @@ function Sync-CropSelection([bool]$Persist = $false) {
     $config.Top = [Math]::Max(0.0, [Math]::Min(95.0, $displayTop))
     $config.Width = [Math]::Max(5.0, [Math]::Min(100.0 - $config.Left, [Math]::Round($cropFrame.Width * 100.0 / $gameWidth, 2)))
     $config.Height = [Math]::Max(5.0, [Math]::Min(100.0 - $config.Top, [Math]::Round($cropFrame.Height * 100.0 / $gameHeight, 2)))
+    Reset-ScanState
     $script:settingsReady = $false
     try {
         $settingLeft.Value = $config.Left
@@ -457,7 +443,7 @@ function Sync-CropSelection([bool]$Persist = $false) {
         $settingHeight.Value = $config.Height
     }
     finally { $script:settingsReady = $true }
-    if ($Persist) { Save-OverlaySettings }
+    Update-OverlayConfig @{} $Persist
     Update-Layout $state.LastBounds
 }
 
@@ -467,6 +453,7 @@ $selection.Add_BoundsEdited({ if ($settingsForm.Visible) { Sync-SubtitleSelectio
 $selection.Add_EditCompleted({ if ($settingsForm.Visible) { Sync-SubtitleSelection $true } })
 $settingsForm.Add_VisibleChanged({
     if ($settingsForm.Visible) {
+        Reset-ScanState
         if (!$subtitle.Visible) {
             $state.SettingsPreview = $true
             $state.SettingsPreviousText = $label.Text
@@ -492,7 +479,9 @@ $settingsForm.Add_VisibleChanged({
 })
 $previewButton.Add_Click({
     try {
-        if ($state.LastBounds) { Update-Layout $state.LastBounds }
+        $bounds = Get-GameBounds
+        if (!$bounds) { throw (Get-UiText 'GameUnavailable') }
+        Update-Layout $bounds
         $settingsForm.Hide()
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 150
@@ -508,7 +497,7 @@ $previewButton.Add_Click({
     finally { $settingsForm.Show(); $settingsForm.Activate() }
 })
 
-$btnToggle.Add_Click({ $state.Enabled = !$state.Enabled; Update-Buttons; if (!$state.Enabled) { Set-Subtitle '' } })
+$btnToggle.Add_Click({ $state.Enabled = !$state.Enabled; Update-Buttons; if (!$state.Enabled) { if (Get-Command Reset-ScanState -ErrorAction SilentlyContinue) { Reset-ScanState } else { Set-Subtitle '' } } })
 $btnLang.Add_Click({ Switch-SubtitleLanguage })
 $btnSettings.Add_Click({ $settingsForm.Show(); $settingsForm.BringToFront(); $settingsForm.Activate() })
 $btnExit.Add_Click({ $toolbar.Close() })
@@ -517,10 +506,19 @@ $toolbar.Add_FormClosed({ $selection.Dispose(); [System.Windows.Forms.Applicatio
 $subtitle.Add_Shown({ [GenshinSubtitleOverlayNative]::MakeNoActivate($subtitle.Handle) })
 $toolbar.Add_Shown({ Update-Buttons })
 $subtitle.Visible = $false
-$initialBounds = @(Get-GameBounds | Select-Object -Last 1)[0]
+$initialBounds = if ($UiCheck) { $null } else { Get-GameBounds }
+if (!$initialBounds) {
+    $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $initialBounds = New-Object GenshinSubtitleOverlayNative+RECT
+    $initialBounds.Left = $screen.Left; $initialBounds.Top = $screen.Top
+    $initialBounds.Right = $screen.Right; $initialBounds.Bottom = $screen.Bottom
+    $state.GameUnavailable = $true
+}
 $state.LastBounds = $initialBounds
 Set-ToolbarCollapsed ([bool]$config.ToolbarCollapsed) $false
 Update-Layout $initialBounds
 Update-Buttons
 $toolbar.Show()
+if ($configLoadError) { $ocrStatus.Text = 'Settings could not be read and were left untouched: ' + $configLoadError }
+elseif ($state.GameUnavailable) { $ocrStatus.Text = Get-UiText 'GameUnavailable' }
 [GenshinSubtitleOverlayNative]::MakeNoActivate($subtitle.Handle)

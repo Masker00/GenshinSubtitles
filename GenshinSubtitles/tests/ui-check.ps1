@@ -3,11 +3,15 @@ function Send-ToolbarMouse([int]$Message, [int]$X, [int]$Y) {
     $packed = ($X -band 0xffff) -bor (($Y -band 0xffff) -shl 16)
     [void][GenshinSubtitleOverlayNative]::SendMessage($toolbar.Handle, $Message, [IntPtr]::new(1), [IntPtr]::new($packed))
 }
+Write-Output 'UI: toolbar'
 Set-ToolbarCollapsed $false $false
 $toolbar.Location = [Drawing.Point]::new($toolbar.MovementBounds.Left + 700, $toolbar.MovementBounds.Top + 700)
 Save-ToolbarPosition
+Write-Output 'UI: toolbar settings saved'
 $beforeToolbar = $toolbar.Location
+Write-Output 'UI: toolbar mouse down'
 Send-ToolbarMouse 0x201 10 20
+Write-Output 'UI: toolbar mouse move'
 Send-ToolbarMouse 0x200 70 50
 Send-ToolbarMouse 0x202 10 20
 Update-Layout $state.LastBounds
@@ -29,7 +33,7 @@ try {
     $toolbar.DrawToBitmap($toolbarSnapshot, [Drawing.Rectangle]::new(0, 0, $toolbar.Width, $toolbar.Height))
     $toolbarSnapshot.Save((Join-Path $root 'test-results/toolbar-icon-check.png'), [Drawing.Imaging.ImageFormat]::Png)
 } finally { $toolbarSnapshot.Dispose() }
-$savedToolbar = Get-Content -Raw -LiteralPath (Join-Path $root 'test-results/overlay-ui-settings.json') | ConvertFrom-Json
+$savedToolbar = Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json
 if (!$savedToolbar.ToolbarCollapsed -or $savedToolbar.ToolbarLeft -ne $config.ToolbarLeft -or $savedToolbar.ToolbarTop -ne $config.ToolbarTop) {
     throw 'Toolbar collapsed state and position were not saved.'
 }
@@ -43,6 +47,7 @@ try {
 } finally { $toolbarSnapshot.Dispose() }
 $frameHiddenOutsideSettings = !$cropFrame.Visible
 $transparentSubtitle = $subtitle.Opacity -eq 1.0 -and $subtitle.TransparencyKey.ToArgb() -eq [Drawing.Color]::Magenta.ToArgb()
+Write-Output 'UI: settings selections'
 $settingsForm.Show()
 [System.Windows.Forms.Application]::DoEvents()
 $frameVisibleInSettings = $cropFrame.Visible
@@ -84,7 +89,7 @@ foreach ($edge in @(1, 2, 4, 8, 5, 6, 9, 10)) {
         throw "Selection resize failed for edge $edge."
     }
 }
-$persisted = Get-Content -Raw -LiteralPath (Join-Path $root 'test-results/overlay-ui-settings.json') | ConvertFrom-Json
+$persisted = Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json
 $dragPositionSaved = $persisted.DisplayLeft -eq $config.DisplayLeft -and $persisted.DisplayTop -eq $config.DisplayTop -and $persisted.DisplayWidth -eq $config.DisplayWidth -and $persisted.DisplayHeight -eq $config.DisplayHeight
 function Send-CropMouse([int]$Message, [int]$X, [int]$Y) {
     $packed = ($X -band 0xffff) -bor (($Y -band 0xffff) -shl 16)
@@ -124,7 +129,7 @@ foreach ($edge in @(1, 2, 4, 8, 5, 6, 9, 10)) {
         throw "Selection resize failed for edge $edge."
     }
 }
-$persisted = Get-Content -Raw -LiteralPath (Join-Path $root 'test-results/overlay-ui-settings.json') | ConvertFrom-Json
+$persisted = Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json
 $cropPositionSaved = $persisted.Left -eq $config.Left -and $persisted.Top -eq $config.Top -and $persisted.Width -eq $config.Width -and $persisted.Height -eq $config.Height
 if (!$cropPositionSaved) { throw 'OCR selection position and size were not saved.' }
 $cropSnapshot = [Drawing.Bitmap]::new($cropFrame.Width, $cropFrame.Height)
@@ -136,6 +141,7 @@ $settingsForm.Hide()
 [System.Windows.Forms.Application]::DoEvents()
 $frameHiddenAfterSettings = !$cropFrame.Visible
 $dragDisabledAfterSettings = $subtitle.ClickThrough -and !$selection.Visible
+Write-Output 'UI: settings selections'
 $settingsForm.Show()
 [System.Windows.Forms.Application]::DoEvents()
 if (!$frameHiddenOutsideSettings -or !$frameVisibleInSettings -or !$frameHiddenAfterSettings -or !$dragEnabledInSettings -or !$dragDisabledAfterSettings -or !$dragPositionSaved -or !$transparentSubtitle) {
@@ -180,6 +186,7 @@ $englishUiWorks = $config.PluginLanguage -eq 'EN' -and $settingsForm.Text -eq 'S
 $settingPluginLanguage.SelectedIndex = 0
 $chineseUiWorks = $config.PluginLanguage -eq 'ZH' -and $settingsForm.Text -eq '字幕设置' -and $settingRecognitionLanguage.Items[1] -eq '英文'
 if (!$englishUiWorks -or !$chineseUiWorks) { throw 'Plugin language did not update the interface.' }
+Write-Output 'UI: lookup'
 $realLookup = Lookup-Official 'But for now, all yo u need to remember is this: If yo u collect Kresnik KristaII, can extract' 'EN'
 if (!$realLookup.opposite.Contains(([string][char]0x514B + [char]0x4EC0 + [char]0x5C3C + [char]0x514B)) -or !$realLookup.source.StartsWith('But for now')) { throw 'PowerShell English-to-Chinese official lookup failed.' }
 $resetSettings.PerformClick()
@@ -238,8 +245,9 @@ try {
     subtitle_bounds = $subtitle.Bounds.ToString()
     capture_bounds = $captureBounds.ToString()
 } | ConvertTo-Json
+. (Join-Path $root 'tests/runtime_ui_tests.ps1')
 $settingsForm.Dispose()
 $cropFrame.Dispose()
 $subtitle.Dispose()
 $toolbar.Dispose()
-exit 0
+return
