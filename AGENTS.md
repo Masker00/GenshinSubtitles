@@ -1,4 +1,4 @@
-# Non-official external OCR overlay. Public candidate; licensing pending confirmation.
+# Non-official external OCR overlay. Code licensed under MIT.
 Read docs/DEVELOPMENT.md before editing. Keep Windows PowerShell 5.1, WinForms,
 Windows OCR, Python standard library and local official-text lookup.
 Preserve text-only click-through subtitles and SET-only draggable selections.

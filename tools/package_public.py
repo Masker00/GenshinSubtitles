@@ -1,4 +1,4 @@
-"""Build/verify a public-source candidate from an explicit, reviewable allowlist."""
+"""Build/verify a public-source package from an explicit, reviewable allowlist."""
 import argparse
 import hashlib
 import json

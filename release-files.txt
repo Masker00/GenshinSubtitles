@@ -9,7 +9,6 @@ setup.bat
 release-files.txt
 docs/DEVELOPMENT.md
 docs/VALIDATION.md
-docs/LICENSE-MIT.template.txt
 docs/images/settings-ocr.png
 docs/images/settings-subtitle.png
 tools/package_public.py

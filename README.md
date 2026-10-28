@@ -2,7 +2,7 @@
 
 非官方 Windows 外部 OCR 字幕覆盖工具。截取游戏字幕区域，使用 Windows OCR 识别，再在本地官方 TextMap 索引中查询配对的中文和英文。原游戏字幕仍然存在；本工具不修改游戏文件、不读写游戏内存、不注入游戏，也不调用在线翻译 API。
 
-当前版本：**v0.1.0-beta.1 本地发布候选**。代码许可证和版权署名尚待维护者确认，尚未公开发布。请勿将本地候选包误认为已经授权开源的正式 Release。
+当前版本：**v0.1.0-beta.1（Beta 预发布）**。工具代码采用 [MIT 许可证](LICENSE)，版权署名为 `2026 Masker_00`；游戏文本权属独立说明。下载见 [GitHub Releases](https://github.com/Masker00/GenshinSubtitles/releases/tag/v0.1.0-beta.1)。
 
 ![三项语言与 OCR 选区设置](docs/images/settings-ocr.png)
 

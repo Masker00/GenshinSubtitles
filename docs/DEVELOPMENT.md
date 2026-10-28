@@ -49,17 +49,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\GenshinSubtitles\overl
 - `GenshinSubtitles/overlay-errors.log`、系统临时目录启动日志：排错信息，可能含实际路径，不公开。
 - `.local/`：本地验证证据和临时干净目录，不公开。
 - `%TEMP%/genshin-scan-*`：单次任务请求与图片，正常退出/取消时清理。
-- `dist/`：候选 ZIP 与 SHA-256，非源码提交项。
+- `dist/`：公开 ZIP 与 SHA-256，非源码提交项。
 
 ## 公开打包
 
 ```powershell
 . .\GenshinSubtitles\resolve-python.ps1
 $subtitlePython = Resolve-SubtitlePython
-& $subtitlePython .\tools\package_public.py --output .\dist\GenshinSubtitles-v0.1.0-beta.1-candidate.zip
-& $subtitlePython .\tools\package_public.py --verify .\dist\GenshinSubtitles-v0.1.0-beta.1-candidate.zip
+& $subtitlePython .\tools\package_public.py --output .\dist\GenshinSubtitles-v0.1.0-beta.1.zip --require-final-license
+& $subtitlePython .\tools\package_public.py --verify .\dist\GenshinSubtitles-v0.1.0-beta.1.zip
 ```
 
-仅打包 `release-files.txt` 明确列出的文件，路径不得越界或为链接；包内生成文件哈希清单和打包状态，旁边生成 ZIP SHA-256。`--require-final-license` 在许可证仍待确认时拒绝生成可公开发布包。源码/候选 ZIP 都不含数据、配置、游戏路径、历史研究、日志或用户信息。
+仅打包 `release-files.txt` 明确列出的文件，路径不得越界或为链接；包内生成文件哈希清单和打包状态，旁边生成 ZIP SHA-256。公开发布时使用 `--require-final-license`，防止误打包许可占位文件。源码/公开 ZIP 都不含数据、配置、游戏路径、历史研究、日志或用户信息。
 
-发布前：确认账号/组织、仓库名、最终许可与版权署名、现在公开的授权；替换 LICENSE、更新候选说明后重新测试与打包。再创建公开仓库、添加 remote、推送 main、创建版本 tag/Release、上传 ZIP/校验文件。未获得上述授权时只交付本地可审查候选。
+本项目使用 MIT 许可证，版权署名为 `2026 Masker_00`，发布仓库为 `Masker00/GenshinSubtitles`。发布新版本时更新 VERSION、版本说明与验证记录，核对允许清单和 Git 实际跟踪内容，重新测试及打包；推送 main 和版本 tag，创建 Release 并上传 ZIP/校验文件。Beta 版本标为预发布。许可证、版权署名或发布目标的变更需另行确认。
