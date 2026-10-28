@@ -1,0 +1,11 @@
+GenshinSubtitles/data/
+GenshinSubtitles/game-path.txt
+**/test-results/
+**/*.log
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/runtime/
+dist/
+.local/
+*.zip
