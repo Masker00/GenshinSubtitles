@@ -24,6 +24,14 @@ if (!$state.Enabled) { throw 'Toggle shortcut failed.' }
 Invoke-OverlayHotkeys $true $false
 if (!$state.Enabled) { throw 'Held shortcut toggled repeatedly.' }
 Invoke-OverlayHotkeys $false $false
+$wasEnabled=$state.Enabled
+Set-ToolbarCollapsed $true $false
+Invoke-OverlayHotkeys $true $false
+if ($state.Enabled -eq $wasEnabled) { throw 'Collapsed toolbar blocked toggle shortcut.' }
+Invoke-OverlayHotkeys $false $false
+Invoke-OverlayHotkeys $true $false
+Invoke-OverlayHotkeys $false $false
+Set-ToolbarCollapsed $false $false
 $before=$state.Language
 Invoke-OverlayHotkeys $false $true
 if ($state.Language -eq $before -or $config.SubtitleLanguage -ne $state.Language) { throw 'Language shortcut failed to update config.' }
@@ -38,3 +46,25 @@ try {
     if ($subtitle.Visible -or $state.LastSource -or $state.Worker -or !$state.GameUnavailable) { throw 'Missing/minimized window did not pause and clear.' }
 } finally { Set-Item Function:Get-GameBounds $gameBoundsFunction }
 Write-Output 'Stale results, SET pause, stop, shortcuts and missing window clearing: OK'
+$fixture=Join-Path $root ('test-results/delayed-ui-worker-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+[IO.File]::WriteAllText($fixture, 'param([string]$WorkerRequest) Start-Sleep -Seconds 30; [Console]::Out.WriteLine(''{"matched":false}'')')
+try {
+    $shell=Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    $state.Worker=[SubtitleScanJob]::Start($shell,$fixture,'unused','pending',$state.Generation,10)
+    $firstPid=$state.Worker.ProcessId
+    Start-ScanWorker $null 'must-not-queue'
+    if ($state.Worker.ProcessId -ne $firstPid) { throw 'Busy scanner started a second worker.' }
+    $before=$state.Language
+    $btnLang.PerformClick()
+    if ($before -eq $state.Language -or $state.Worker.Completed) { throw 'UI did not respond during active scan.' }
+    Update-OverlayConfig @{RecognitionLanguage=$(if ($config.RecognitionLanguage -eq 'ZH') {'EN'} else {'ZH'})} $false
+    if ($state.Worker -or (Get-Process -Id $firstPid -ErrorAction SilentlyContinue)) { throw 'Recognition change did not cancel the worker.' }
+    $state.Worker=[SubtitleScanJob]::Start($shell,$fixture,'unused','exit',$state.Generation,10)
+    $exitPid=$state.Worker.ProcessId
+    $toolbar.Close()
+    if ($state.Worker -or (Get-Process -Id $exitPid -ErrorAction SilentlyContinue)) { throw 'Exit left the worker running.' }
+    Write-Output 'Active-scan UI controls, one-worker limit, cancellation and toolbar exit cleanup: OK'
+} finally {
+    Stop-ScanWorker
+    Remove-Item -LiteralPath $fixture -Force
+}

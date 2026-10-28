@@ -24,6 +24,10 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 if ($RunTests) {
     & $python (Join-Path $PSScriptRoot 'tests/ocr_direction_tests.py')
     if ($LASTEXITCODE -ne 0) { throw 'OCR direction tests failed.' }
+    & $python (Join-Path $PSScriptRoot 'tests/index_validation_tests.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Index validation tests failed.' }
+    & $python (Join-Path $PSScriptRoot 'tests/installation_tests.py')
+    if ($LASTEXITCODE -ne 0) { throw 'Installation failure-path tests failed.' }
     & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests/config_tests.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Configuration tests failed.' }
     & $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'tests/worker_tests.ps1')

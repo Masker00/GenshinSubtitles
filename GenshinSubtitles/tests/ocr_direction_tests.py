@@ -58,6 +58,9 @@ try:
     assert chinese_result["source"] == zh and chinese_result["text_id"] == "1"
     partial = json.loads(lookup("EN", "But for now, all yo u need to remember is this: If yo u collect Kresnik Kristall", "json"))
     assert partial["matched"] and partial["source"] == en and partial["zh"] == zh
+    medium_score = json.loads(lookup("EN", "x" * 16 + en[16:], "json"))
+    assert 0.80 <= medium_score["similarity"] < 0.90, medium_score
+    assert medium_score["matched"] and medium_score["source"] == en and medium_score["opposite"] == zh
     assert lookup("EN", "unrelated English subtitle with no official match") == ""
     assert lookup("ZH", prompt_ocr) == prompt_en
     assert lookup("ZH", "我很早就进言但是内容完全无关别的事情") == ""

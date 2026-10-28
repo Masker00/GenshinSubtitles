@@ -84,6 +84,7 @@ function Update-OverlayConfig([hashtable]$Changes, [bool]$Persist=$true) {
 }
 function Initialize-OverlayConfig {
     $script:settingsPath = Join-Path $root 'data/overlay-settings.json'
+    if ($ConfigDirectory) { $script:settingsPath = Join-Path ([IO.Path]::GetFullPath($ConfigDirectory)) 'overlay-settings.json' }
     if ($UiCheck) { $script:settingsPath = Join-Path $root ('test-results/ui-config-' + [Guid]::NewGuid().ToString('N') + '/overlay-settings.json') }
     $script:settingsExistedAtStartup = Test-Path -LiteralPath $settingsPath
     $loaded = Read-OverlayConfig $settingsPath

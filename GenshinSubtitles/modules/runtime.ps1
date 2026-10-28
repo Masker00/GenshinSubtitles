@@ -108,8 +108,13 @@ function Invoke-ScanTick {
         try { Add-Content -LiteralPath (Join-Path $root 'overlay-errors.log') -Value ((Get-Date -Format o) + ' ' + $_.Exception.Message) } catch {}
     }
 }
+function Set-OverlayEnabled([bool]$Enabled) {
+    $state.Enabled=$Enabled
+    Update-Buttons
+    if (!$Enabled) { Reset-ScanState }
+}
 function Invoke-OverlayHotkeys([bool]$Toggle, [bool]$Language) {
-    if ($Toggle -and !$state.HotkeyToggle) { $btnToggle.PerformClick() }
+    if ($Toggle -and !$state.HotkeyToggle) { Set-OverlayEnabled (!$state.Enabled) }
     if ($Language -and !$state.HotkeyLanguage) { Switch-SubtitleLanguage }
     $state.HotkeyToggle=$Toggle; $state.HotkeyLanguage=$Language
 }

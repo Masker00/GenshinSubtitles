@@ -7,6 +7,7 @@ import re
 import sqlite3
 import sys
 from difflib import SequenceMatcher
+from contextlib import closing
 
 
 def key(text):
@@ -66,7 +67,7 @@ def lookup_text(db, text, source="ZH"):
 
 def lookup_database(path, text, source="ZH"):
     from index_schema import check_schema
-    with sqlite3.connect(pathlib.Path(path).resolve().as_uri() + "?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(pathlib.Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
         check_schema(db)
         return lookup_text(db, text, source)
 

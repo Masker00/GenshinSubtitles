@@ -5,6 +5,7 @@ import json
 import pathlib
 import sqlite3
 import sys
+from contextlib import closing
 
 SCHEMA_VERSION = "2"
 
@@ -31,7 +32,7 @@ def check_schema(db):
 
 
 def validate(path, sources, extra_pairs=1):
-    with sqlite3.connect(pathlib.Path(path).resolve().as_uri() + "?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(pathlib.Path(path).resolve().as_uri() + "?mode=ro", uri=True)) as db:
         check_schema(db)
         metadata = dict(db.execute("SELECT key, value FROM metadata"))
         if metadata.get("extra_pairs") != str(extra_pairs):

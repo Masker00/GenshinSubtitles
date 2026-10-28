@@ -4,6 +4,7 @@ import json
 import pathlib
 import re
 import sqlite3
+import uuid
 from index_schema import SCHEMA_VERSION, fingerprints
 
 
@@ -36,9 +37,7 @@ def main():
                 raise ValueError(f"Conflicting text IDs in {path}: {conflicts[:5]}")
             target.update(extra)
     args.db.parent.mkdir(parents=True, exist_ok=True)
-    temp = args.db.with_suffix(args.db.suffix + ".tmp")
-    if temp.exists():
-        temp.unlink()
+    temp = args.db.with_suffix(args.db.suffix + "." + uuid.uuid4().hex + ".tmp")
     db = sqlite3.connect(str(temp))
     try:
         db.execute("PRAGMA journal_mode=OFF")
@@ -78,9 +77,16 @@ def main():
         db.commit()
         count = db.execute("SELECT COUNT(*) FROM subtitle").fetchone()[0]
         english_count = db.execute("SELECT COUNT(*) FROM english_subtitle").fetchone()[0]
+    except BaseException:
+        db.close()
+        temp.unlink(missing_ok=True)
+        raise
     finally:
         db.close()
-    temp.replace(args.db)
+    try:
+        temp.replace(args.db)
+    finally:
+        temp.unlink(missing_ok=True)
     print(json.dumps({"database": str(args.db), "zh_entries": count, "en_entries": english_count}, ensure_ascii=True))
 
 

@@ -55,6 +55,7 @@ $cropFrame.ShowInTaskbar = $false
 $cropFrame.TopMost = $true
 
 $toolbar = New-Object GenshinSubtitleToolbarForm
+$toolbar.Text = 'Genshin Subtitle Overlay'
 $toolbar.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
 $toolbar.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
 $toolbar.ShowInTaskbar = $false
@@ -497,11 +498,11 @@ $previewButton.Add_Click({
     finally { $settingsForm.Show(); $settingsForm.Activate() }
 })
 
-$btnToggle.Add_Click({ $state.Enabled = !$state.Enabled; Update-Buttons; if (!$state.Enabled) { if (Get-Command Reset-ScanState -ErrorAction SilentlyContinue) { Reset-ScanState } else { Set-Subtitle '' } } })
+$btnToggle.Add_Click({ Set-OverlayEnabled (!$state.Enabled) })
 $btnLang.Add_Click({ Switch-SubtitleLanguage })
 $btnSettings.Add_Click({ $settingsForm.Show(); $settingsForm.BringToFront(); $settingsForm.Activate() })
 $btnExit.Add_Click({ $toolbar.Close() })
-$toolbar.Add_FormClosed({ $selection.Dispose(); [System.Windows.Forms.Application]::ExitThread() })
+$toolbar.Add_FormClosed({ Stop-ScanWorker; $selection.Dispose(); [System.Windows.Forms.Application]::ExitThread() })
 
 $subtitle.Add_Shown({ [GenshinSubtitleOverlayNative]::MakeNoActivate($subtitle.Handle) })
 $toolbar.Add_Shown({ Update-Buttons })
