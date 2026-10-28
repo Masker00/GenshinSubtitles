@@ -1,0 +1,8 @@
+{
+  "Left":16.5, "Top":84, "Width":67, "Height":9.5,
+  "FontSize":24, "ShowFrame":true,
+  "DisplayLeft":16.5, "DisplayTop":93.5, "DisplayWidth":67, "DisplayHeight":5.5,
+  "DisplayGap":12, "TextPadding":16,
+  "PluginLanguage":"ZH", "RecognitionLanguage":"EN", "SubtitleLanguage":"EN",
+  "ToolbarLeft":-1, "ToolbarTop":-1, "ToolbarCollapsed":false
+}

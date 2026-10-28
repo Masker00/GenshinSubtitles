@@ -1,4 +1,5 @@
-GenshinSubtitles/data/
+GenshinSubtitles/data/*
+!GenshinSubtitles/data/sources.json
 GenshinSubtitles/game-path.txt
 **/test-results/
 **/*.log

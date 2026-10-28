@@ -1,0 +1,12 @@
+{
+  "repository": "DimbreathBot/AnimeGameData",
+  "commit": "9587d1afbd9ab0419cdd00dc05ecd114b9e3fe99",
+  "release": "CNRELWin7.1.0_R48145775_S48131320_D48145775",
+  "files": [
+    {"name":"TextMapCHS.json","gitBlob":"2f5e815b41f387273d7b8eaf09f00509358e3523","bytes":49920231},
+    {"name":"TextMapEN.json","gitBlob":"3d6b3fb277f8b517fb535db83d86345a5cc9c3f1","bytes":55719620},
+    {"name":"TextMap_MediumCHS.json","gitBlob":"ddf41a92f596f3f3300d7b0901c2b8f61a3ecb6d","bytes":18801724},
+    {"name":"TextMap_MediumEN.json","gitBlob":"e9e278567a37220d46e1a86a0c7876f57f71abd6","bytes":20704568}
+  ],
+  "notes": "Community extraction and game dialogue remain subject to their respective rights. The public source archive contains no TextMap payloads."
+}
